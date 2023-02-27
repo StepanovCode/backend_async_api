@@ -1,0 +1,97 @@
+version: '3.8'
+
+services:
+  postgres:
+    container_name: movie_manager_postgres_prod
+    image: postgres:13
+    env_file:
+      - movie_manager/envs/prod.env
+    volumes:
+      - postgres_volume:/postgresql/data
+    restart: unless-stopped
+
+  django:
+    container_name: movie_manager_django_prod
+    build: movie_manager/app
+    env_file:
+      - movie_manager/envs/prod.env
+    volumes:
+      - staticfiles_volume:/opt/app/staticfiles
+    depends_on:
+      - postgres
+
+  nginx:
+    container_name: movie_manager_nginx_prod
+    image: nginx:latest
+    volumes:
+      - ./movie_manager/nginx_server/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./movie_manager/nginx_server/configs:/etc/nginx/conf.d:ro
+      - ./movie_manager/nginx_server/data:/data/:ro
+      - staticfiles_volume:/opt/app/staticfiles:ro
+    depends_on:
+      - django
+    ports:
+      - "80:80"
+
+  etl:
+    container_name: movie_manager_etl_prod
+    build: movie_manager/etl
+    env_file:
+      - movie_manager/envs/prod.env
+    depends_on:
+      - django
+
+  elastic-service:
+    container_name: movie_manager_elastic_prod
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.7.0
+    environment:
+      discovery.type: single-node
+    volumes:
+      - /elastic:/elastic
+    restart: unless-stopped
+
+  cache:
+    container_name: movie_manager_redis_cache_prod
+    image: redis:6.2-alpine
+    restart: always
+    command: redis-server --save 20 1 --loglevel warning --requirepass eYVX7EwVmmxKPCDmwMtyKVge8oLd2t81
+    volumes:
+      - cache:/data
+
+  elastic_etl:
+    container_name: movie_manager_elastic_etl_prod
+    build:
+      context: movie_manager
+      dockerfile: ELK_etl/Dockerfile
+    depends_on:
+      - postgres
+    env_file:
+      - movie_manager/envs/prod.env
+
+  elastic_updated_by_table_pipeline_etl:
+    container_name: elastic_updated_by_table_pipeline_etl_prod
+    build:
+      context: movie_manager
+      dockerfile: ELK_etl/UpdateByTablePipelineDockerfile
+    depends_on:
+      - postgres
+    env_file:
+      - movie_manager/envs/prod.env
+
+  fast_api_service:
+    build: async_api_service
+    container_name: fast_api_movie_service_prod
+    env_file:
+      - async_api_service/envs/prod.env
+
+networks:
+  host:
+    name: host
+    external: true
+
+volumes:
+  postgres_volume:
+  staticfiles_volume:
+    driver: local
+  cache:
+    driver: local

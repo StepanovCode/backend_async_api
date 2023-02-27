@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  fastapi:
+    build: ../../.
+    image: test_fastapi-image
+    ports:
+      - "8350:8200"
+    env_file:
+      - ../../envs/test.env
+
+
+  tests:
+    image: test_fastapi-image
+    entrypoint: >
+      sh -c "cd tests/functional
+      && python -c 'import sys; print(sys.path)'
+      && poetry install --no-interaction --no-ansi
+      && python utils/wait_for_redis.py
+      && python utils/wait_for_es.py
+      && python -m pytest src"
+    env_file:
+      - ../../envs/test.env
+    depends_on:
+      - fastapi
+
+  test-elastic:
+    container_name: test_elastic
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.7.0
+    environment:
+      discovery.type: single-node
+    ports:
+      - "11400:9200"
+    volumes:
+      - /elastic:/elastic
+    restart: unless-stopped
+
+  test-cache:
+    container_name: test_redis
+    image: redis:6.2-alpine
+    restart: always
+    ports:
+      - '11500:6379'
+    command: redis-server --save 20 1 --loglevel warning --requirepass eYVX7EwVmmxKPCDmwMtyKVge8oLd2t81
+    volumes:
+      - test-cache:/test_data
+
+volumes:
+  test-cache:
+    driver: local

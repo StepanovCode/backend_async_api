@@ -1,0 +1,33 @@
+FROM python:3.10
+
+WORKDIR /opt
+
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
+ENV DJANGO_SETTINGS_MODULE 'config.settings'
+
+ENV POETRY_VERSION=1.3.1
+ENV POETRY_HOME=/opt/poetry
+ENV POETRY_VENV=/opt/poetry-venv
+
+RUN ln -s /usr/bin/python3.10 /usr/bin/python
+
+RUN python -m pip install poetry==${POETRY_VERSION}
+
+COPY /app ./app
+COPY /ELK_etl ./ELK_etl
+COPY /ELK_etl/pyproject.toml .
+COPY /ELK_etl/poetry.lock .
+COPY /ELK_etl/wait-for-it.sh .
+
+RUN poetry config virtualenvs.create false
+RUN poetry install --no-interaction --no-ansi
+ENV PYTHONPATH="$PYTHONPATH:opt/"
+ENV PYTHONPATH="$PYTHONPATH:ETK_etl/"
+ENV PYTHONPATH="$PYTHONPATH:app/"
+
+RUN chmod +x wait-for-it.sh
+RUN chmod +x ./ELK_etl/entrypoint.sh
+
+CMD ["./wait-for-it.sh", "postgres:5432", "--", "./ELK_etl/update_by_table_pipeline_entrypoint.sh" ]
+#CMD ["./ELK_etl/entrypoint.sh" ]

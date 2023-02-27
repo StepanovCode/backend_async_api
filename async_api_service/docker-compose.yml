@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+
+  fast_api_service:
+    build: .
+    container_name: fast_api_movie_service
+    network_mode: "host"
+    env_file:
+      - envs/dev.local.env
+#    ports:
+#      - "8200:8200"
+
+networks:
+  host:
+    name: host
+    external: true
